@@ -35,57 +35,62 @@ public class MainActivity extends Activity {
     private static final String SERVER_IP = "192.168.168.106";
     private static final int PORT_MY = 7005;
     private static final String IP_MY = "192.168.168.117";
-    private static final String downloadedFile = "/storage/emulated/0/Download/hello.txt";
+    private static final String downloadedFile = "/storage/emulated/0/DCIM/COMP7005/hello.txt";//"/storage/sdcard0/Download/hello.png";
 
-    UDPReceiverThread mUDPReceiver= null;
+    UDPReceiverThread mUDPReceiver = null;
     Handler mHandler = null;
 
 
-    /** Called when the activity is first created. */
+    /**
+     * Called when the activity is first created.
+     */
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        ((TextView)findViewById(R.id.tv_ip)).setText(SERVER_IP);
-        ((TextView)findViewById(R.id.tv_port)).setText(SERVER_PORT+"");
-        ((TextView)findViewById(R.id.tv_ip_my)).setText(IP_MY);
-        ((TextView)findViewById(R.id.tv_port_my)).setText(PORT_MY+"");
-        tv = (TextView)findViewById(R.id.tv);
-        mHandler= new Handler();
+        ((TextView) findViewById(R.id.tv_ip)).setText(SERVER_IP);
+        ((TextView) findViewById(R.id.tv_port)).setText(SERVER_PORT + "");
+        ((TextView) findViewById(R.id.tv_ip_my)).setText(IP_MY);
+        ((TextView) findViewById(R.id.tv_port_my)).setText(PORT_MY + "");
+        tv = (TextView) findViewById(R.id.tv);
+        mHandler = new Handler();
     }
-    public void onClickConnect(View v){
+
+    public void onClickConnect(View v) {
         // start receiver thread
-        mUDPReceiver= new UDPReceiverThread(MainActivity.this);
+        mUDPReceiver = new UDPReceiverThread(MainActivity.this);
         mUDPReceiver.start();
     }
-    public void onClickDisconnect(View v){
+
+    public void onClickDisconnect(View v) {
         mUDPReceiver.onStop();
-        Log.d("onclick","stop");
+        Log.d("onclick", "stop");
     }
-    public void onClickClear(View v){
+
+    public void onClickClear(View v) {
         st = "";
         tv.setText(st);
     }
 
-    private void sendPacket(){
+    private void sendPacket() {
         new Thread(new Runnable() {
             public void run() {
-                try{
+                try {
                     InetAddress host = InetAddress.getByName(SERVER_IP);
                     String message = "send by Android " + st + " \n";
                     ds = new DatagramSocket();
                     byte[] data = message.getBytes();
                     dp = new DatagramPacket(data, data.length, host, SERVER_PORT);
                     ds.send(dp);
-                }catch(Exception e){
+                } catch (Exception e) {
                     System.err.println("sendPacket : " + e);
                 }
             }
         }).start();
     }
 
-    public void printOnPhoneScreen(String msg){
-        st += msg;
+    public void printOnPhoneScreen(String msg) {
+        st += msg+"\n";
         mHandler.post(new Runnable() {
             @Override
             public void run() {
@@ -94,6 +99,7 @@ public class MainActivity extends Activity {
             }
         });
     }
+
     @Override
     public void onDestroy() {
         mUDPReceiver.onStop();
@@ -102,6 +108,7 @@ public class MainActivity extends Activity {
 
     class UDPReceiverThread extends Thread {
         private static final String TAG="UDPReceiverThread";
+        private static final int comm_port = 7005;
         public static final String COMM_END_STRING="end";
 
         DatagramSocket mDatagramRecvSocket= null;
@@ -112,7 +119,7 @@ public class MainActivity extends Activity {
             super();
             mActivity= mainActivity;
             try {
-                mDatagramRecvSocket= new DatagramSocket(mActivity.PORT_MY);
+                mDatagramRecvSocket= new DatagramSocket(comm_port);
             }catch( Exception e ) {
                 e.printStackTrace();
             }
@@ -124,13 +131,12 @@ public class MainActivity extends Activity {
             super.start();
         }
         public void onStop() {
-            Log.d(TAG,"stop");
             mIsArive= false;
         }
         @Override
         public void run() {
             byte receiveBuffer[] = new byte[1024];
-            DatagramPacket receivePacket =  new DatagramPacket(receiveBuffer, receiveBuffer.length);
+            DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
             FileOutputStream fos = null;
             try {
                 fos = new FileOutputStream(downloadedFile);
@@ -138,22 +144,23 @@ public class MainActivity extends Activity {
                 e.printStackTrace();
             }
 
-
             Log.d(TAG, "In run(): thread start.");
             try {
                 while (mIsArive) {
-                        mDatagramRecvSocket.receive(receivePacket);
-                        byte[] receivedData = receivePacket.getData();
-                        fos.write(receivedData);
-
-                    /*
                     mDatagramRecvSocket.receive(receivePacket);
                     String packetString=new String(receivePacket.getData(),0, receivePacket.getLength());
-                    mActivity.printOnPhoneScreen("packet received ["+packetString+"]\n");
+                    Log.d(TAG,"In run(): packet received ["+packetString+"]");
+                    byte[] receivedData = receivePacket.getData();
+                    mActivity.printOnPhoneScreen("datacame!");
+                    fos.write(receivedData);
                     if( packetString.equals(COMM_END_STRING) ) {
                         mActivity.finish();
                         break;
-                    }*/
+                    }else{
+                        Log.d(TAG,packetString.equals(COMM_END_STRING)+"");
+                        Log.d(TAG,packetString+" "+COMM_END_STRING);
+
+                    }
                 }
             }catch( Exception e ) {
                 e.printStackTrace();
@@ -164,7 +171,76 @@ public class MainActivity extends Activity {
             mActivity= null;
             receivePacket= null;
             receiveBuffer= null;
-
         }
     }
+
+    /*
+    class UDPReceiverThread extends Thread {
+        private static final String TAG = "UDPReceiverThread";
+        public static final String COMM_END_STRING = "end";
+
+        DatagramSocket mDatagramRecvSocket = null;
+        MainActivity mActivity = null;
+        boolean mIsArive = false;
+
+        public UDPReceiverThread(MainActivity mainActivity) {
+            super();
+            mActivity = mainActivity;
+            try {
+                mDatagramRecvSocket = new DatagramSocket(mActivity.PORT_MY);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+        }
+
+        @Override
+        public void start() {
+            mIsArive = true;
+            super.start();
+        }
+
+        public void onStop() {
+            Log.d(TAG, "stop");
+            mIsArive = false;
+        }
+
+        @Override
+        public void run() {
+            byte receiveBuffer[] = new byte[1024];
+            DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
+            FileOutputStream fos = null;
+            try {
+                fos = new FileOutputStream(downloadedFile);
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            }
+
+            Log.d(TAG, "In run(): thread start.");
+                while (mIsArive) {
+                    try {
+                        /*if( !mIsArive ) {
+                            // 終了メッセージを受信したらActivity終了
+                            // whileループを抜けてソケットclose＆スレッド終了
+                            mActivity.finish();
+                            break;
+                        }
+                        mDatagramRecvSocket.receive(receivePacket);
+                        byte[] receivedData = receivePacket.getData();
+                        mActivity.printOnPhoneScreen("datacame!");
+                        fos.write(receivedData);
+
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    Log.d(TAG, "In run(): thread end.");
+                    mDatagramRecvSocket.close();
+                    mDatagramRecvSocket = null;
+                    mActivity = null;
+                    receivePacket = null;
+                    receiveBuffer = null;
+                }
+
+        }
+    }*/
 }
