@@ -19,6 +19,7 @@ import java.io.FileOutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -33,6 +34,7 @@ import org.json.JSONObject;
 public class MainActivity extends Activity {
 
     private DatagramSocket ds;
+    private InetAddress host;
     private DatagramPacket dp;
     private TextView tv;
     private String st = "";
@@ -45,12 +47,12 @@ public class MainActivity extends Activity {
     private static final int START_SEQUENCE_NUM = 1;
 
     private static final int SERVER_PORT = 7005;
-    private static final String SERVER_IP = "192.168.168.106";
+    private static final String SERVER_IP = "192.168.168.113";
     private static final int PORT_MY = 7005;
     private static final String IP_MY = "192.168.168.117";
     private static final String downloadedFile = "/storage/sdcard0/Download/hello.txt";//"/storage/emulated/0/DCIM/COMP7005/hello.txt";//
 
-    UDPReceiverThread mUDPReceiver = null;
+    UDPReceiver mUDPReceiver = null;
     Handler mHandler = null;
 
 
@@ -67,16 +69,24 @@ public class MainActivity extends Activity {
         ((TextView) findViewById(R.id.tv_port_my)).setText(PORT_MY + "");
         tv = (TextView) findViewById(R.id.tv);
         mHandler = new Handler();
+        try {
+            host = InetAddress.getByName(SERVER_IP);
+            ds = new DatagramSocket();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public void onClickConnect(View v) {
         // start receiver thread
-        mUDPReceiver = new UDPReceiverThread(MainActivity.this);
+        if(mUDPReceiver == null) {
+            mUDPReceiver = new UDPReceiver(MainActivity.this);
+        }
         mUDPReceiver.start();
     }
 
     public void onClickDisconnect(View v) {
-        mUDPReceiver.onStop();
+        mUDPReceiver.stop();
     }
 
     public void onClickClear(View v) {
@@ -98,27 +108,26 @@ public class MainActivity extends Activity {
         JSONObject sendJson = null;
         if (packetType.equals("SOS")) {
             sendJson = createJson("SOS",0,null);
-            printOnPhoneScreen("Acking SOS");
+            printOnPhoneScreen("Acking SOS" +" "+sendJson.toString());
         } else if (packetType.equals("EOT")) {// send eot three times
             sendJson = createJson("EOT",0,null);
             sendPacket(sendJson.toString().getBytes());
             sendPacket(sendJson.toString().getBytes());
             printOnPhoneScreen("Acking EOT");
-
         } else {// data
             int seq = arrivedJson.getInt(SEQ);
             sendJson = createJson("ACK",seq,null);
-            printOnPhoneScreen("Acking packet with seq# "+seq);
+            printOnPhoneScreen("Acking packet with seq# "+seq +" "+sendJson.toString());
         }
+        Log.d("sendingPacket",sendJson.toString());
         sendPacket(sendJson.toString().getBytes());
     }
 
     private void sendPacket( final byte[] data) {
+
         new Thread(new Runnable() {
             public void run() {
                 try {
-                    InetAddress host = InetAddress.getByName(SERVER_IP);
-                    ds = new DatagramSocket();
                     dp = new DatagramPacket(data, data.length, host, SERVER_PORT);
                     ds.send(dp);
                 } catch (Exception e) {
@@ -141,39 +150,35 @@ public class MainActivity extends Activity {
 
     @Override
     public void onDestroy() {
-        mUDPReceiver.onStop();
+        mUDPReceiver.stop();
         super.onDestroy();
     }
 
-    class UDPReceiverThread extends Thread {
+    class UDPReceiver implements Runnable {
         private static final String TAG = "UDPReceiverThread";
-        private static final int comm_port = 7005;
-        public static final String COMM_END_STRING = "end";
-
         DatagramSocket mDatagramRecvSocket = null;
         ArrayList<JSONObject> framesArrived;
         MainActivity mActivity = null;
-        boolean mIsArive = false;
 
-        public UDPReceiverThread(MainActivity mainActivity) {
+        Thread udpreceiverthread;
+
+        public UDPReceiver(MainActivity mainActivity) {
             super();
             mActivity = mainActivity;
-            try {
-                mDatagramRecvSocket = new DatagramSocket(comm_port);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
 
         }
 
-        @Override
         public void start() {
-            mIsArive = true;
-            super.start();
+            if( udpreceiverthread == null ) {
+                udpreceiverthread = new Thread( this );
+                udpreceiverthread.start();
+            }
         }
 
-        public void onStop() {
-            mIsArive = false;
+        public void stop() {
+            if( udpreceiverthread != null ) {
+                udpreceiverthread.interrupt();
+            }
         }
 
         @Override
@@ -181,10 +186,10 @@ public class MainActivity extends Activity {
             byte receiveBuffer[] = new byte[1024];
             DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
             FileOutputStream fos = null;
-
             framesArrived = new ArrayList<JSONObject>();
             JSONObject ackedFrame = null;
             try {
+                mDatagramRecvSocket = new DatagramSocket(PORT_MY);
                 fos = new FileOutputStream(downloadedFile);
                 ackedFrame = createJson("DATA",START_SEQUENCE_NUM - 1,null) ;
             } catch (Exception e) {
@@ -193,7 +198,7 @@ public class MainActivity extends Activity {
 
             Log.d(TAG, "In run(): thread start.");
             try {
-                while (mIsArive) {
+                while (!udpreceiverthread.interrupted()){
                     mDatagramRecvSocket.receive(receivePacket);
                     String packetString = new String(receivePacket.getData(), 0, receivePacket.getLength());
                     JSONObject arrivedJson = new JSONObject(packetString);
@@ -216,6 +221,7 @@ public class MainActivity extends Activity {
                         mActivity.dataArrived(ackedFrame);
 
                     } else if (packetType.equals("SOS")) {
+                        framesArrived.add(arrivedJson);
                         mActivity.dataArrived(arrivedJson);
                     } else if (packetType.equals("EOT")) {
                         mActivity.finish();
@@ -230,15 +236,15 @@ public class MainActivity extends Activity {
                     Log.d(TAG, "In run(): packet received [" + packetString + "]");
 
                 }
+                Log.d(TAG, "In run(): thread end.");
+                if(mDatagramRecvSocket!=null) {
+                    mDatagramRecvSocket.close();
+                }
             } catch (Exception e) {
                 e.printStackTrace();
+            }finally {
+                udpreceiverthread = null;
             }
-            Log.d(TAG, "In run(): thread end.");
-            mDatagramRecvSocket.close();
-            mDatagramRecvSocket = null;
-            mActivity = null;
-            receivePacket = null;
-            receiveBuffer = null;
         }
     }
 
