@@ -50,7 +50,7 @@ public class MainActivity extends Activity {
     private static final String SERVER_IP = "192.168.168.113";
     private static final int PORT_MY = 7005;
     private static final String IP_MY = "192.168.168.117";
-    private static final String downloadedFile = "/storage/sdcard0/Download/hello.txt";//"/storage/emulated/0/DCIM/COMP7005/hello.txt";//
+    private static final String downloadedFile = "/storage/sdcard0/DCIM/COMP7005/hello.txt";//"/storage/emulated/0/DCIM/COMP7005/hello.txt";//
 
     UDPReceiver mUDPReceiver = null;
     Handler mHandler = null;
@@ -106,10 +106,7 @@ public class MainActivity extends Activity {
     public void dataArrived(JSONObject arrivedJson) throws JSONException {
         String packetType = arrivedJson.getString(TYPE);
         JSONObject sendJson = null;
-        if (packetType.equals("SOS")) {
-            sendJson = createJson("SOS",0,null);
-            printOnPhoneScreen("Acking SOS" +" "+sendJson.toString());
-        } else if (packetType.equals("EOT")) {// send eot three times
+       if (packetType.equals("EOT")) {// send eot three times
             sendJson = createJson("EOT",0,null);
             sendPacket(sendJson.toString().getBytes());
             sendPacket(sendJson.toString().getBytes());
@@ -212,7 +209,6 @@ public class MainActivity extends Activity {
                             for (int i = ackedFrameNo; i < ackedFrameNo+sizeFramesArrived; i++) {
                                 if (i + 1 == framesArrived.get(0).getInt(SEQ)) {
                                     fos.write(framesArrived.get(0).getString(DATA).getBytes());
-                                    arrivedJson = framesArrived.get(0);
                                     ackedFrame = framesArrived.get(0);
                                     framesArrived.remove(0);
                                 }
@@ -220,9 +216,6 @@ public class MainActivity extends Activity {
                         }
                         mActivity.dataArrived(ackedFrame);
 
-                    } else if (packetType.equals("SOS")) {
-                        framesArrived.add(arrivedJson);
-                        mActivity.dataArrived(arrivedJson);
                     } else if (packetType.equals("EOT")) {
                         mActivity.finish();
                         mActivity.dataArrived(arrivedJson);
@@ -265,74 +258,4 @@ public class MainActivity extends Activity {
 
     }
 
-
-    /*
-    class UDPReceiverThread extends Thread {
-        private static final String TAG = "UDPReceiverThread";
-        public static final String COMM_END_STRING = "end";
-
-        DatagramSocket mDatagramRecvSocket = null;
-        MainActivity mActivity = null;
-        boolean mIsArive = false;
-
-        public UDPReceiverThread(MainActivity mainActivity) {
-            super();
-            mActivity = mainActivity;
-            try {
-                mDatagramRecvSocket = new DatagramSocket(mActivity.PORT_MY);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-
-        }
-
-        @Override
-        public void start() {
-            mIsArive = true;
-            super.start();
-        }
-
-        public void onStop() {
-            Log.d(TAG, "stop");
-            mIsArive = false;
-        }
-
-        @Override
-        public void run() {
-            byte receiveBuffer[] = new byte[1024];
-            DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
-            FileOutputStream fos = null;
-            try {
-                fos = new FileOutputStream(downloadedFile);
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
-            }
-
-            Log.d(TAG, "In run(): thread start.");
-                while (mIsArive) {
-                    try {
-                        /*if( !mIsArive ) {
-                            // 終了メッセージを受信したらActivity終了
-                            // whileループを抜けてソケットclose＆スレッド終了
-                            mActivity.finish();
-                            break;
-                        }
-                        mDatagramRecvSocket.receive(receivePacket);
-                        byte[] receivedData = receivePacket.getData();
-                        mActivity.printOnPhoneScreen("datacame!");
-                        fos.write(receivedData);
-
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                    Log.d(TAG, "In run(): thread end.");
-                    mDatagramRecvSocket.close();
-                    mDatagramRecvSocket = null;
-                    mActivity = null;
-                    receivePacket = null;
-                    receiveBuffer = null;
-                }
-
-        }
-    }*/
 }
