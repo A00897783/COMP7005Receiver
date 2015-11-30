@@ -203,9 +203,9 @@ public class MainActivity extends Activity {
                             framesArrived.add(arrivedJson);
                             Collections.sort(framesArrived, new SeqNoComparator());// sorting arrived frames
                             int sizeFramesArrived = framesArrived.size();
-                            for (int i = ackedFrame.getInt(SEQ); i < sizeFramesArrived; i++) {
+                            int ackedFrameNo = ackedFrame.getInt(SEQ);
+                            for (int i = ackedFrameNo; i < ackedFrameNo+sizeFramesArrived; i++) {
                                 if (i + 1 == framesArrived.get(0).getInt(SEQ)) {
-                                    byte[] receivedData = arrivedJson.getString(DATA).getBytes();
                                     fos.write(framesArrived.get(0).getString(DATA).getBytes());
                                     arrivedJson = framesArrived.get(0);
                                     ackedFrame = framesArrived.get(0);
@@ -214,6 +214,7 @@ public class MainActivity extends Activity {
                             }
                         }
                         mActivity.dataArrived(ackedFrame);
+
                     } else if (packetType.equals("SOS")) {
                         mActivity.dataArrived(arrivedJson);
                     } else if (packetType.equals("EOT")) {
