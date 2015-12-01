@@ -1,6 +1,8 @@
 package com.example.maoshahin.finalreceiver;
 
 import android.annotation.TargetApi;
+import android.net.DhcpInfo;
+import android.net.wifi.WifiManager;
 import android.nfc.Tag;
 import android.os.Build;
 import android.support.v7.app.ActionBarActivity;
@@ -8,6 +10,7 @@ import android.os.Bundle;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.text.format.Formatter;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -49,8 +52,7 @@ public class MainActivity extends Activity {
     private static final int SERVER_PORT = 7005;
     private static final String SERVER_IP = "192.168.168.113";
     private static final int PORT_MY = 7005;
-    private static final String IP_MY = "192.168.168.117";
-    private static final String downloadedFile = "/storage/sdcard0/DCIM/COMP7005/hello.txt";//"/storage/emulated/0/DCIM/COMP7005/hello.txt";//
+    private static final String downloadedFile = "/storage/emulated/0/DCIM//COMP7005/hello.txt";//"/storage/emulated/0/DCIM/COMP7005/hello.txt";//
 
     UDPReceiver mUDPReceiver = null;
     Handler mHandler = null;
@@ -65,7 +67,12 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
         ((TextView) findViewById(R.id.tv_ip)).setText(SERVER_IP);
         ((TextView) findViewById(R.id.tv_port)).setText(SERVER_PORT + "");
-        ((TextView) findViewById(R.id.tv_ip_my)).setText(IP_MY);
+        //get local ip
+        final WifiManager manager = (WifiManager) super.getSystemService(WIFI_SERVICE);
+        final DhcpInfo dhcp = manager.getDhcpInfo();
+        final String address = Formatter.formatIpAddress(dhcp.gateway);
+        ((TextView) findViewById(R.id.tv_ip_my)).setText(address);
+
         ((TextView) findViewById(R.id.tv_port_my)).setText(PORT_MY + "");
         tv = (TextView) findViewById(R.id.tv);
         mHandler = new Handler();
@@ -95,29 +102,21 @@ public class MainActivity extends Activity {
     }
 
 
-    private JSONObject createJson(String type, int sequenceNo,byte[] data) throws JSONException {
-        JSONObject packet = new JSONObject();
-        packet.put(TYPE, type);
-        packet.put(SEQ,sequenceNo);
-        packet.put(DATA, data);
-        return packet;
-    }
-
-    public void dataArrived(JSONObject arrivedJson) throws JSONException {
-        String packetType = arrivedJson.getString(TYPE);
-        JSONObject sendJson = null;
+    public void dataArrived(Frame arrivedFrame) {
+        String packetType = arrivedFrame.TYPE;
+        Frame sendFrame = null;
        if (packetType.equals("EOT")) {// send eot three times
-            sendJson = createJson("EOT",0,null);
-            sendPacket(sendJson.toString().getBytes());
-            sendPacket(sendJson.toString().getBytes());
+            sendFrame = new Frame("EOT",0,null);
+            sendPacket(sendFrame.toByte());
+            sendPacket(sendFrame.toByte());
             printOnPhoneScreen("Acking EOT");
         } else {// data
-            int seq = arrivedJson.getInt(SEQ);
-            sendJson = createJson("ACK",seq,null);
-            printOnPhoneScreen("Acking packet with seq# "+seq +" "+sendJson.toString());
+            int seq = arrivedFrame.SEQ;
+            sendFrame = new Frame("ACK",seq,null);
+            printOnPhoneScreen("Acking packet with seq# "+seq +" "+sendFrame.toString());
         }
-        Log.d("sendingPacket",sendJson.toString());
-        sendPacket(sendJson.toString().getBytes());
+        Log.d("sendingPacket",sendFrame.toString());
+        sendPacket(sendFrame.toByte());
     }
 
     private void sendPacket( final byte[] data) {
@@ -154,7 +153,7 @@ public class MainActivity extends Activity {
     class UDPReceiver implements Runnable {
         private static final String TAG = "UDPReceiverThread";
         DatagramSocket mDatagramRecvSocket = null;
-        ArrayList<JSONObject> framesArrived;
+        ArrayList<Frame> framesArrived;
         MainActivity mActivity = null;
 
         Thread udpreceiverthread;
@@ -183,12 +182,12 @@ public class MainActivity extends Activity {
             byte receiveBuffer[] = new byte[1024];
             DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
             FileOutputStream fos = null;
-            framesArrived = new ArrayList<JSONObject>();
-            JSONObject ackedFrame = null;
+            framesArrived = new ArrayList<Frame>();
+            Frame ackedFrame = null;
             try {
                 mDatagramRecvSocket = new DatagramSocket(PORT_MY);
                 fos = new FileOutputStream(downloadedFile);
-                ackedFrame = createJson("DATA",START_SEQUENCE_NUM - 1,null) ;
+                ackedFrame = new Frame("DATA",START_SEQUENCE_NUM - 1,null) ;
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -198,17 +197,18 @@ public class MainActivity extends Activity {
                 while (!udpreceiverthread.interrupted()){
                     mDatagramRecvSocket.receive(receivePacket);
                     String packetString = new String(receivePacket.getData(), 0, receivePacket.getLength());
-                    JSONObject arrivedJson = new JSONObject(packetString);
-                    String packetType = arrivedJson.getString(TYPE);
+                    Log.d(TAG, "In run(): packet received [" + packetString + "]");
+                    Frame arrivedFrame = Frame.createFrameFromByte(receivePacket.getData());
+                    String packetType = arrivedFrame.TYPE;
                     if (packetType.equals("DAT")) {
-                        if(ackedFrame.getInt(SEQ)<arrivedJson.getInt(SEQ)) {
-                            framesArrived.add(arrivedJson);
+                        if(ackedFrame.SEQ<arrivedFrame.SEQ) {
+                            framesArrived.add(arrivedFrame);
                             Collections.sort(framesArrived, new SeqNoComparator());// sorting arrived frames
                             int sizeFramesArrived = framesArrived.size();
-                            int ackedFrameNo = ackedFrame.getInt(SEQ);
+                            int ackedFrameNo = ackedFrame.SEQ;
                             for (int i = ackedFrameNo; i < ackedFrameNo+sizeFramesArrived; i++) {
-                                if (i + 1 == framesArrived.get(0).getInt(SEQ)) {
-                                    fos.write(framesArrived.get(0).getString(DATA).getBytes());
+                                if (i + 1 == framesArrived.get(0).SEQ) {
+                                    fos.write(framesArrived.get(0).DATA);
                                     ackedFrame = framesArrived.get(0);
                                     framesArrived.remove(0);
                                 }
@@ -218,7 +218,7 @@ public class MainActivity extends Activity {
 
                     } else if (packetType.equals("EOT")) {
                         mActivity.finish();
-                        mActivity.dataArrived(arrivedJson);
+                        mActivity.dataArrived(arrivedFrame);
                         Toast.makeText(mActivity, "File Transfer is successfully finished", Toast.LENGTH_LONG);
                         break;
                     } else if (packetType.equals("ERR")) {
@@ -241,19 +241,10 @@ public class MainActivity extends Activity {
         }
     }
 
-    class SeqNoComparator implements Comparator<JSONObject> {
-
+    class SeqNoComparator implements Comparator<Frame> {
         @TargetApi(Build.VERSION_CODES.KITKAT)
-        public int compare(JSONObject a, JSONObject b) {
-            int a_seq = 0;
-            int b_seq = 0;
-            try {
-                a_seq = a.getInt(SEQ);
-                b_seq = b.getInt(SEQ);
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-            return Integer.compare(a_seq, b_seq);
+        public int compare(Frame a, Frame b) {
+            return Integer.compare(a.SEQ, b.SEQ);
         }
 
     }
