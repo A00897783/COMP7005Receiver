@@ -3,7 +3,7 @@ package com.example.maoshahin.finalreceiver;
 import java.io.IOException;
 
 /**
- * Created by mao on 15/11/30.
+ * A class to store Frame
  */
 
 import com.fasterxml.jackson.core.JsonParseException;
@@ -48,12 +48,22 @@ public class Frame {
         return DATA;
     }
 
+    /**
+     * convert string to frame object using Jackson JSON
+     * @param arrived data in string
+     * @return frame with data arrived
+     * @throws IOException
+     */
     public static Frame createFrameFromString(String arrived) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
         Frame f = mapper.readValue(arrived, Frame.class);
         return f;
     }
 
+    /**
+     * change frame(this object) into string using Jackson JSON
+     * @return
+     */
     @Override
     public String toString() {
         ObjectMapper mapper = new ObjectMapper();
