@@ -25,17 +25,26 @@ public class Frame {
         DATA = data;
     }
 
+    public Frame(){
+
+    }
+
     public static Frame createFrameFromString(String arrived) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
         Frame f = mapper.readValue(arrived, Frame.class);
         return f;
     }
 
-    public String toString(Frame f) throws JsonProcessingException {
+    @Override
+    public String toString() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.enable(SerializationFeature.INDENT_OUTPUT);
-        String json = mapper.writeValueAsString(f);
-        System.out.println(json);
+        String json = null;
+        try {
+            json = mapper.writeValueAsString(this);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+        }
         return json;
     }
 }

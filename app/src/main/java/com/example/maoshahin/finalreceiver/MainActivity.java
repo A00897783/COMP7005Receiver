@@ -52,8 +52,9 @@ public class MainActivity extends Activity {
     private static final int SERVER_PORT = 7005;
     private static final String SERVER_IP = "192.168.168.113";
     private static final int PORT_MY = 7005;
-    private static final String downloadedFile = "/storage/emulated/0/DCIM//COMP7005/hello.txt";//"/storage/emulated/0/DCIM/COMP7005/hello.txt";//
+    private static final String downloadedFile = "/storage/emulated/0/DCIM//COMP7005/hello2.txt";//"/storage/emulated/0/DCIM/COMP7005/hello.txt";//
 
+    private static final int RECEIVER_BUFFER_SIZE = 3000;
     UDPReceiver mUDPReceiver = null;
     Handler mHandler = null;
 
@@ -113,7 +114,7 @@ public class MainActivity extends Activity {
         } else {// data
             int seq = arrivedFrame.SEQ;
             sendFrame = new Frame("ACK",seq,null);
-            printOnPhoneScreen("Acking packet with seq# "+seq +" "+sendFrame.toString());
+            printOnPhoneScreen("Acking packet with seq# "+seq);
         }
         Log.d("sendingPacket",sendFrame.toString());
         sendPacket(sendFrame.toString().getBytes());
@@ -179,7 +180,7 @@ public class MainActivity extends Activity {
 
         @Override
         public void run() {
-            byte receiveBuffer[] = new byte[1024];
+            byte receiveBuffer[] = new byte[RECEIVER_BUFFER_SIZE];
             DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
             FileOutputStream fos = null;
             framesArrived = new ArrayList<Frame>();
@@ -199,16 +200,17 @@ public class MainActivity extends Activity {
                     String packetString = new String(receivePacket.getData(), 0, receivePacket.getLength());
                     Frame arrivedFrame = Frame.createFrameFromString(packetString);
                     String packetType = arrivedFrame.TYPE;
+                    mActivity.printOnPhoneScreen(packetType+" packet received, "+"sequence No:"+arrivedFrame.SEQ);
                     if (packetType.equals("DAT")) {
                         if(ackedFrame.SEQ<arrivedFrame.SEQ) {
                             framesArrived.add(arrivedFrame);
                             Collections.sort(framesArrived, new SeqNoComparator());// sorting arrived frames
                             int sizeFramesArrived = framesArrived.size();
-                            int ackedFrameNo = ackedFrame.SEQ;
-                            for (int i = ackedFrameNo; i < ackedFrameNo+sizeFramesArrived; i++) {
-                                if (i + 1 == framesArrived.get(0).SEQ) {
-                                    fos.write(framesArrived.get(0).DATA);
+                            for (int i = 0; i < sizeFramesArrived; i++) {
+                                if ((ackedFrame.SEQ + 1) == framesArrived.get(0).SEQ) {
                                     ackedFrame = framesArrived.get(0);
+                                    fos.write(ackedFrame.DATA);
+                                    mActivity.printOnPhoneScreen("Writing data of a packet, "+"sequence No:"+ackedFrame.SEQ);
                                     framesArrived.remove(0);
                                 }
                             }
@@ -216,13 +218,8 @@ public class MainActivity extends Activity {
                         mActivity.dataArrived(ackedFrame);
 
                     } else if (packetType.equals("EOT")) {
-                        mActivity.finish();
                         mActivity.dataArrived(arrivedFrame);
-                        Toast.makeText(mActivity, "File Transfer is successfully finished", Toast.LENGTH_LONG);
-                        break;
-                    } else if (packetType.equals("ERR")) {
-                        mActivity.finish();
-                        Toast.makeText(mActivity, "There was an error", Toast.LENGTH_LONG);
+                        mActivity.printOnPhoneScreen("File Transfer is successfully finished");
                         break;
                     }
                     Log.d(TAG, "In run(): packet received [" + packetString + "]");
