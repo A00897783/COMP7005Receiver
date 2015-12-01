@@ -107,8 +107,8 @@ public class MainActivity extends Activity {
         Frame sendFrame = null;
        if (packetType.equals("EOT")) {// send eot three times
             sendFrame = new Frame("EOT",0,null);
-            sendPacket(sendFrame.toByte());
-            sendPacket(sendFrame.toByte());
+            sendPacket(sendFrame.toString().getBytes());
+            sendPacket(sendFrame.toString().getBytes());
             printOnPhoneScreen("Acking EOT");
         } else {// data
             int seq = arrivedFrame.SEQ;
@@ -116,7 +116,7 @@ public class MainActivity extends Activity {
             printOnPhoneScreen("Acking packet with seq# "+seq +" "+sendFrame.toString());
         }
         Log.d("sendingPacket",sendFrame.toString());
-        sendPacket(sendFrame.toByte());
+        sendPacket(sendFrame.toString().getBytes());
     }
 
     private void sendPacket( final byte[] data) {
@@ -197,8 +197,7 @@ public class MainActivity extends Activity {
                 while (!udpreceiverthread.interrupted()){
                     mDatagramRecvSocket.receive(receivePacket);
                     String packetString = new String(receivePacket.getData(), 0, receivePacket.getLength());
-                    Log.d(TAG, "In run(): packet received [" + packetString + "]");
-                    Frame arrivedFrame = Frame.createFrameFromByte(receivePacket.getData());
+                    Frame arrivedFrame = Frame.createFrameFromString(packetString);
                     String packetType = arrivedFrame.TYPE;
                     if (packetType.equals("DAT")) {
                         if(ackedFrame.SEQ<arrivedFrame.SEQ) {
